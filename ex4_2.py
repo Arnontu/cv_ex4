@@ -7,11 +7,22 @@ from scipy import spatial
 import numpy as np
 
 ## get Screen Size
-user32 = ctypes.windll.user32
-screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+# user32 = ctypes.windll.user32
+# screensize = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+SCREEN_SIZE = (1536, 864)
+INPUT_VIDEO = 'results_7.avi'
+OUTPUT_VIDEO = "final_result.avi"
+BOUNDING_BOX_TXT = "results_7.txt"
+CAR_POINTER = 3
+CHANGE_COUNTER_MAX = 3
+CHANGE_COUNTER = CHANGE_COUNTER_MAX
+DISPLAY = True
+RANDOM = False
+
+
 def fit_Image(oriimg):
-    W, H = screensize
-    W = int(0.9*W)
+    W, H = SCREEN_SIZE
+    W = int(0.9 * W)
     H = int(0.9 * H)
     height, width, depth = oriimg.shape
     scaleWidth = float(W) / float(width)
@@ -36,7 +47,7 @@ def parse_file(file):
         while line:
             line_str = line.strip()
             if line_str.startswith("Objects:"):
-                print(j)
+                # print(j)
                 j += 1
                 is_obj = True
             elif line_str.startswith("FPS"):
@@ -55,91 +66,109 @@ def parse_file(file):
                     # print("Line: {},{},{},{}".format(left_x, top_y, width, hight))
 
                 except:
-                    print(f"Nope:\t{split}")
+                    # print(f"Nope:\t{split}")
                     arr.append((-1, -1))
             line = fp.readline()
             cnt += 1
         return objects
 
 
-
-
-objects = parse_file("results_7.txt")
+objects = parse_file(BOUNDING_BOX_TXT)
 final_result = []
-pointer = 5
-change_car_fail = 3
-change_car = change_car_fail
 
 for i, lst in enumerate(objects):
-    if change_car == change_car_fail:
-        change_car = 0
+    if CHANGE_COUNTER == CHANGE_COUNTER_MAX:
+        CHANGE_COUNTER = 0
         prev = 0
-        point = lst[pointer]
-        index = pointer
-        print(point)
+        # if CAR_POINTER>=len(lst):
+        if RANDOM or CAR_POINTER >= len(lst):
+            CAR_POINTER = np.random.choice(len(lst) - 1)
+        point = lst[CAR_POINTER]
+        index = CAR_POINTER
+        # print(point)
         final_result.append((-2, -2))
         final_result.append(point)
         continue
-    # each row j is the distance between point object[i-1][j] to all the points objects[i]
     dis = spatial.distance.cdist(objects[prev], objects[i])
     min_dis = np.min(dis, axis=1)
     a = np.median(min_dis)
     b = np.median(min_dis)
     if min_dis[index] > 2 * a:
-        change_car += 1
+        CHANGE_COUNTER += 1
         # skip
         final_result.append((-1, -1))
     else:
-        change_car=0
+        CHANGE_COUNTER = 0
         prev = i
         new_index = np.argmin(dis, axis=1)[index]
         point = lst[new_index]
         final_result.append(point)
-        print(point)
         index = new_index
 
-
-cap = cv2.VideoCapture('results_7.avi')
+cap = cv2.VideoCapture(INPUT_VIDEO)
 all_points = np.array(final_result)
 all_point_adj = np.zeros(all_points.shape)
-boundries = np.where(all_points[:, 0] == -2)[0]
-for i in range(len(boundries) - 1):
-    seg = all_points[boundries[i] + 1:boundries[i + 1]]
+boundaries = np.where(all_points[:, 0] == -2)[0]
+for i in range(len(boundaries) - 1):
+    seg = all_points[boundaries[i] + 1:boundaries[i + 1]]
     seg = seg[seg != -1].reshape(-1, 2)
     y = (seg.flatten())[1::2]
     x = (seg.flatten())[::2]
-    res = linregress(x,y)[:2]
-    all_point_adj[boundries[i]:boundries[i + 1]] = res
+    res = linregress(x, y)[:2]
+    all_point_adj[boundaries[i]:boundaries[i + 1]] = res
 
-if boundries[-1] < len(all_points):
-    seg = all_points[boundries[-1]+1:]
+if boundaries[-1] < len(all_points):
+    seg = all_points[boundaries[-1] + 1:]
     seg = seg[seg != -1].reshape(-1, 2)
     y = (seg.flatten())[1::2]
     x = (seg.flatten())[::2]
-    res = linregress(x,y)[:2]
-    all_point_adj[boundries[-1]:] = res
+    res = linregress(x, y)[:2]
+    all_point_adj[boundaries[-1]:] = res
 d = deque(final_result[::-1])
+main_counter = 0
 d_arrow = deque(all_point_adj[::-1])
-
-
+writer = None
 while (cap.isOpened()):
     ret, frame = cap.read()
     try:
-        slope, interceptfloat = d_arrow.pop()
-        (x1, y1) = (0,int(interceptfloat))
-        (x2, y2) = (frame.shape[1],int(frame.shape[1]*slope+interceptfloat))
-        cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-        cv2.circle(frame, d.pop(), 20, (255, 0, 255), thickness=20)
+        # Option A
+        # slope, interceptfloat = d_arrow.pop()
+        # (x1, y1) = (0, int(interceptfloat))
+        # (x2, y2) = (frame.shape[1], int(frame.shape[1] * slope + interceptfloat))
+        # cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        # cv2.circle(frame, d.pop(), 15, (0, 0, 255), thickness=30)
+
+        # Option B
+        cv2.circle(frame, final_result[main_counter], 15, (0, 0, 255), thickness=30)
+        side_size = 2
+        if (side_size - 1) < main_counter < len(final_result) - side_size + 1:
+            seg = np.array(final_result[main_counter - side_size:main_counter + side_size + 1])
+            if (-1, -1) not in seg and (-2, -2) not in seg:
+                y = (seg.flatten())[1::2]
+                x = (seg.flatten())[::2]
+                slope, interceptfloat = linregress(x, y)[:2]
+                (x1, y1) = (0, int(interceptfloat))
+                (x2, y2) = (frame.shape[1], int(frame.shape[1] * slope + interceptfloat))
+                cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        main_counter += 1
+
+
     except Exception as e:
         pass
     try:
         frame = cv2.resize(frame, (600, 600))
         frame = fit_Image(frame)
-        cv2.imshow('frame', frame)
-    except:
-        print("Finished")
+        if DISPLAY:
+            cv2.imshow('frame', frame)
+        if writer is None:
+            (h, w) = frame.shape[:2]
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            writer = cv2.VideoWriter(OUTPUT_VIDEO, cv2.VideoWriter_fourcc(*'XVID'), fps,
+                                     (h, w))
+        writer.write(frame)
+    except Exception as e:
+        print(str(e))
         break
-
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 cap.release()
