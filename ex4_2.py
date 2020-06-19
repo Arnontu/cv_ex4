@@ -16,7 +16,7 @@ BOUNDING_BOX_TXT = "results_7.txt"
 CAR_POINTER = 3
 CHANGE_COUNTER_MAX = 3
 CHANGE_COUNTER = CHANGE_COUNTER_MAX
-DISPLAY = True
+DISPLAY = False
 RANDOM = False
 
 
@@ -58,15 +58,19 @@ def parse_file(file):
             elif is_obj and line_str != "":
                 split = list(filter(None, line_str.split(" ")))
                 try:
-                    left_x, top_y, width, hight = int(split[3]), int(split[5]), int(split[7]), int(split[9][:-1])
-                    center = (int(left_x + (width / 2)), int(top_y + (hight / 2)))
-                    arr.append(center)
-                    # arr.append([left_x, top_y, width, hight])
-                    # print("Line {}: {}".format(cnt, line.strip()))
-                    # print("Line: {},{},{},{}".format(left_x, top_y, width, hight))
+                    width = int(line_str[line_str.index("width:") + 6:].strip().split(" ")[0])
+                    height = int(line_str[line_str.index("height:") + 7:].strip().split(" ")[0][:-1])
+                    left_x = int(line_str[line_str.index("left_x:") + 7:].strip().split(" ")[0])
+                    top_y=int(line_str[line_str.index("top_y:") + 7:].strip().split(" ")[0])
+                    # left_x, top_y, width, hight = int(split[3]), int(split[5]), int(split[7]), int(split[9][:-1])
 
-                except:
-                    # print(f"Nope:\t{split}")
+                    center = (int(left_x + (width / 2)), int(top_y + (height / 2)))
+                    arr.append(center)
+
+
+                except Exception as e:
+                    print(str(e))
+
                     arr.append((-1, -1))
             line = fp.readline()
             cnt += 1
@@ -85,15 +89,14 @@ for i, lst in enumerate(objects):
             CAR_POINTER = np.random.choice(len(lst) - 1)
         point = lst[CAR_POINTER]
         index = CAR_POINTER
-        # print(point)
         final_result.append((-2, -2))
         final_result.append(point)
         continue
     dis = spatial.distance.cdist(objects[prev], objects[i])
     min_dis = np.min(dis, axis=1)
-    a = np.median(min_dis)
-    b = np.median(min_dis)
-    if min_dis[index] > 2 * a:
+    # a = np.median(min_dis)
+    # b = np.median(min_dis)
+    if min_dis[index] > 2 * np.median(min_dis):
         CHANGE_COUNTER += 1
         # skip
         final_result.append((-1, -1))
